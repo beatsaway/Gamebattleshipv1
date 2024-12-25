@@ -1,1 +1,533 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Battleship Game with Fog of War</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f0f0f5;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    #game-container {
+      display: flex;
+      justify-content: center;
+      gap: 50px;
+      margin-top: 20px;
+    }
+
+    .grid-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .grid-title {
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(8, 40px);
+      grid-template-rows: repeat(8, 40px);
+      gap: 2px;
+    }
+
+    .cell {
+      width: 40px;
+      height: 40px;
+      border: 1px solid #444;
+      background: #ddd;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      font-size: 1em;
+      user-select: none;
+      position: relative;
+    }
+
+    .cell.ship {
+      background: #4caf50;
+    }
+
+    .cell.placed {
+      background: #4caf50;
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .cell.hit {
+      background: red;
+      color: white;
+    }
+
+    .cell.miss {
+      background: lightblue;
+      color: white;
+    }
+
+    #controls {
+      margin-top: 20px;
+    }
+
+    #controls button {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin: 0 10px;
+      cursor: pointer;
+    }
+
+    #instruction {
+      font-size: 1.2em;
+      margin-top: 20px;
+      color: #333;
+    }
+
+    #score {
+      margin-top: 20px;
+    }
+
+    #winner {
+      font-size: 1.5em;
+      color: green;
+      margin-top: 20px;
+      display: none;
+    }
+
+    /* Disable pointer events when not the player's turn or during setup */
+    .disabled {
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    /* Highlighting during ship placement */
+    .cell.temp-ship {
+      background: rgba(76, 175, 80, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <h1>Battleship Game with Fog of War</h1>
+  <p id="instruction">Player 1, place your Cruiser (Size: 3). Use "Rotate Ship" to change orientation.</p>
+  <div id="controls">
+    <button id="rotate-btn">Rotate Ship (R)</button>
+    <button id="confirm-btn" disabled>Confirm Placement</button>
+  </div>
+  <div id="game-container">
+    <div class="grid-wrapper">
+      <div class="grid-title">Your Grid</div>
+      <div id="player-grid" class="grid"></div>
+    </div>
+    <div class="grid-wrapper">
+      <div class="grid-title">Opponent's Grid</div>
+      <div id="opponent-grid" class="grid disabled"></div>
+    </div>
+  </div>
+  <div id="score">
+    <p>Player 1 Hits: <span id="player1-score">0</span></p>
+    <p>Player 2 Hits: <span id="player2-score">0</span></p>
+  </div>
+  <p id="winner"></p>
+
+  <script>
+    // Selecting DOM elements
+    const playerGrid = document.getElementById("player-grid");
+    const opponentGrid = document.getElementById("opponent-grid");
+    const instruction = document.getElementById("instruction");
+    const rotateBtn = document.getElementById("rotate-btn");
+    const confirmBtn = document.getElementById("confirm-btn");
+    const winnerDisplay = document.getElementById("winner");
+    const player1ScoreEl = document.getElementById("player1-score");
+    const player2ScoreEl = document.getElementById("player2-score");
+
+    // Game variables
+    const gridSize = 8;
+    const ships = [
+      { size: 3, name: "Cruiser" },
+      { size: 2, name: "Destroyer" },
+      { size: 1, name: "Submarine" },
+    ];
+    let currentPlayer = 1;
+    let shipIndex = 0;
+    let orientation = "horizontal"; // 'horizontal' or 'vertical'
+    let tempShipCells = [];
+    let player1Ships = [];
+    let player2Ships = [];
+    let player1Hits = [];
+    let player2Hits = [];
+    let setupPhase = true;
+    let attackingPlayer = 1;
+
+    // Initialize both grids
+    function createGrid(gridElement) {
+      gridElement.innerHTML = "";
+      for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+          const cell = document.createElement("div");
+          cell.classList.add("cell");
+          cell.dataset.row = i;
+          cell.dataset.col = j;
+          gridElement.appendChild(cell);
+        }
+      }
+    }
+
+    createGrid(playerGrid);
+    createGrid(opponentGrid);
+
+    // Handle rotation
+    function rotateShip() {
+      orientation = orientation === "horizontal" ? "vertical" : "horizontal";
+      updateInstruction();
+      highlightTempShip();
+    }
+
+    rotateBtn.addEventListener("click", rotateShip);
+
+    // Allow rotation using the 'R' key
+    document.addEventListener("keydown", (e) => {
+      if (e.key.toLowerCase() === "r") {
+        rotateShip();
+      }
+    });
+
+    // Update instruction text
+    function updateInstruction() {
+      const currentShip = ships[shipIndex];
+      instruction.textContent = `Player ${currentPlayer}, place your ${currentShip.name} (Size: ${currentShip.size}). Orientation: ${orientation}`;
+    }
+
+    // Highlight temporary ship placement
+    function highlightTempShip() {
+      clearTempShip();
+      const gridElement = currentPlayer === 1 ? playerGrid : opponentGrid;
+      const cells = gridElement.getElementsByClassName("cell");
+      for (let cell of cells) {
+        cell.classList.remove("temp-ship");
+      }
+
+      // Calculate possible placement based on current orientation
+      // No highlighting during attack phase
+      if (!setupPhase) return;
+
+      // Find the last clicked cell for placement
+      // We'll store the last clicked position
+      if (lastClickedCell) {
+        const row = +lastClickedCell.dataset.row;
+        const col = +lastClickedCell.dataset.col;
+        const ship = ships[shipIndex];
+        let proposedCells = [];
+
+        for (let i = 0; i < ship.size; i++) {
+          const targetRow = orientation === "horizontal" ? row : row + i;
+          const targetCol = orientation === "horizontal" ? col + i : col;
+
+          if (targetRow >= gridSize || targetCol >= gridSize) {
+            proposedCells = [];
+            break;
+          }
+
+          // Check for overlapping ships
+          const playerShips = currentPlayer === 1 ? player1Ships : player2Ships;
+          if (playerShips.some(shipCell => shipCell.row === targetRow && shipCell.col === targetCol)) {
+            proposedCells = [];
+            break;
+          }
+
+          proposedCells.push({ row: targetRow, col: targetCol });
+        }
+
+        // Highlight if valid
+        if (proposedCells.length === ship.size) {
+          proposedCells.forEach(cell => {
+            const gridCell = document.querySelector(`#${currentPlayer === 1 ? 'player' : 'opponent'}-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+            gridCell.classList.add("temp-ship");
+          });
+          tempShipCells = proposedCells;
+          confirmBtn.disabled = false;
+        } else {
+          tempShipCells = [];
+          confirmBtn.disabled = true;
+        }
+      }
+    }
+
+    let lastClickedCell = null;
+
+    // Handle ship placement on player's grid
+    function handlePlayerGridClick(e) {
+      if (!setupPhase || currentPlayer !== 1) return;
+      const cell = e.target;
+      if (!cell.classList.contains("cell")) return;
+
+      lastClickedCell = cell;
+      const row = +cell.dataset.row;
+      const col = +cell.dataset.col;
+      const ship = ships[shipIndex];
+
+      // Calculate ship cells based on orientation
+      let proposedCells = [];
+      for (let i = 0; i < ship.size; i++) {
+        const targetRow = orientation === "horizontal" ? row : row + i;
+        const targetCol = orientation === "horizontal" ? col + i : col;
+
+        // Check boundaries
+        if (targetRow >= gridSize || targetCol >= gridSize) {
+          proposedCells = [];
+          break;
+        }
+
+        // Check for overlapping ships
+        if (player1Ships.some(cell => cell.row === targetRow && cell.col === targetCol)) {
+          proposedCells = [];
+          break;
+        }
+
+        proposedCells.push({ row: targetRow, col: targetCol });
+      }
+
+      // Highlight proposed ship
+      if (proposedCells.length === ship.size) {
+        clearTempShip();
+        proposedCells.forEach(cell => {
+          const gridCell = document.querySelector(`#player-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+          gridCell.classList.add("temp-ship");
+        });
+        tempShipCells = proposedCells;
+        confirmBtn.disabled = false;
+      } else {
+        clearTempShip();
+        tempShipCells = [];
+        confirmBtn.disabled = true;
+      }
+    }
+
+    // Handle ship placement on opponent's grid (Player 2)
+    function handleOpponentGridClickForPlacement(e) {
+      if (!setupPhase || currentPlayer !== 2) return;
+      const cell = e.target;
+      if (!cell.classList.contains("cell")) return;
+
+      lastClickedCell = cell;
+      const row = +cell.dataset.row;
+      const col = +cell.dataset.col;
+      const ship = ships[shipIndex];
+
+      // Calculate ship cells based on orientation
+      let proposedCells = [];
+      for (let i = 0; i < ship.size; i++) {
+        const targetRow = orientation === "horizontal" ? row : row + i;
+        const targetCol = orientation === "horizontal" ? col + i : col;
+
+        // Check boundaries
+        if (targetRow >= gridSize || targetCol >= gridSize) {
+          proposedCells = [];
+          break;
+        }
+
+        // Check for overlapping ships
+        if (player2Ships.some(cell => cell.row === targetRow && cell.col === targetCol)) {
+          proposedCells = [];
+          break;
+        }
+
+        proposedCells.push({ row: targetRow, col: targetCol });
+      }
+
+      // Highlight proposed ship
+      if (proposedCells.length === ship.size) {
+        clearTempShip();
+        proposedCells.forEach(cell => {
+          const gridCell = document.querySelector(`#opponent-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+          gridCell.classList.add("temp-ship");
+        });
+        tempShipCells = proposedCells;
+        confirmBtn.disabled = false;
+      } else {
+        clearTempShip();
+        tempShipCells = [];
+        confirmBtn.disabled = true;
+      }
+    }
+
+    // Clear temporary ship highlights
+    function clearTempShip() {
+      const gridElement = currentPlayer === 1 ? playerGrid : opponentGrid;
+      const cells = gridElement.getElementsByClassName("cell");
+      for (let cell of cells) {
+        cell.classList.remove("temp-ship");
+      }
+    }
+
+    // Confirm ship placement
+    function confirmPlacement() {
+      if (tempShipCells.length === 0) {
+        alert("Invalid ship placement! Please select a valid location.");
+        return;
+      }
+
+      const gridElement = currentPlayer === 1 ? playerGrid : opponentGrid;
+      const playerShips = currentPlayer === 1 ? player1Ships : player2Ships;
+
+      // Add ships to player's ships array
+      playerShips.push(...tempShipCells);
+
+      // Mark the cells as placed ships
+      tempShipCells.forEach(cell => {
+        const gridCell = document.querySelector(`#${currentPlayer === 1 ? 'player' : 'opponent'}-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+        gridCell.classList.add("placed");
+        gridCell.classList.remove("temp-ship");
+      });
+
+      // Reset temporary cells and disable confirm button
+      tempShipCells = [];
+      confirmBtn.disabled = true;
+      lastClickedCell = null;
+
+      shipIndex++;
+      if (shipIndex < ships.length) {
+        // Continue placing next ship
+        updateInstruction();
+      } else {
+        if (currentPlayer === 1) {
+          // Switch to Player 2 for ship placement
+          currentPlayer = 2;
+          shipIndex = 0;
+          instruction.textContent = `Player 2, place your ${ships[shipIndex].name} (Size: ${ships[shipIndex].size}). Use "Rotate Ship" to change orientation.`;
+        } else {
+          // All ships placed, start attacking with Fog of War
+          setupPhase = false;
+          currentPlayer = 1;
+          attackingPlayer = 1;
+          instruction.textContent = `All ships placed! Player 1, start attacking the opponent's grid!`;
+          rotateBtn.disabled = true;
+          confirmBtn.disabled = true;
+          playerGrid.classList.add("disabled");
+          opponentGrid.classList.remove("disabled");
+          applyFogOfWar();
+        }
+      }
+    }
+
+    confirmBtn.addEventListener("click", confirmPlacement);
+
+    // Handle attacking the opponent's grid
+    function handleOpponentAttack(e) {
+      if (setupPhase) return; // Do not allow attacking during setup
+      if (attackingPlayer !== currentPlayer) return;
+
+      const cell = e.target;
+      if (!cell.classList.contains("cell")) return;
+      if (cell.classList.contains("hit") || cell.classList.contains("miss")) return; // Already attacked
+
+      const row = +cell.dataset.row;
+      const col = +cell.dataset.col;
+
+      // Determine if hit
+      const opponentShips = currentPlayer === 1 ? player2Ships : player1Ships;
+      const isHit = opponentShips.some(ship => ship.row === row && ship.col === col);
+
+      if (isHit) {
+        cell.textContent = "💥";
+        cell.classList.add("hit");
+        if (currentPlayer === 1) {
+          player1Hits.push({ row, col });
+          player1ScoreEl.textContent = player1Hits.length;
+          checkWin(1);
+        } else {
+          player2Hits.push({ row, col });
+          player2ScoreEl.textContent = player2Hits.length;
+          checkWin(2);
+        }
+      } else {
+        cell.textContent = "❌";
+        cell.classList.add("miss");
+      }
+
+      // Switch turns
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      attackingPlayer = currentPlayer;
+      instruction.textContent = `Player ${currentPlayer}, it's your turn to attack!`;
+    }
+
+    // Check for win condition
+    function checkWin(winningPlayer) {
+      const opponentShips = winningPlayer === 1 ? player2Ships : player1Ships;
+      const opponentHits = winningPlayer === 1 ? player1Hits : player2Hits;
+
+      // Check if all opponent's ships have been hit
+      if (opponentHits.length >= opponentShips.length) {
+        // Verify that all ship cells are hit
+        const allHit = opponentShips.every(shipCell => opponentHits.some(hit => hit.row === shipCell.row && hit.col === shipCell.col));
+        if (allHit) {
+          winnerDisplay.textContent = `Player ${winningPlayer} Wins!`;
+          winnerDisplay.style.display = "block";
+          instruction.style.display = "none";
+          opponentGrid.classList.add("disabled");
+          playerGrid.classList.add("disabled");
+          rotateBtn.disabled = true;
+          confirmBtn.disabled = true;
+        }
+      }
+    }
+
+    // Apply Fog of War after ship placement
+    function applyFogOfWar() {
+      // Hide opponent's ships by removing their visibility on the opponent's grid
+      player2Ships.forEach(ship => {
+        const gridCell = document.querySelector(`#opponent-grid .cell[data-row="${ship.row}"][data-col="${ship.col}"]`);
+        if (gridCell) {
+          gridCell.classList.remove("ship");
+        }
+      });
+
+      // Ensure player's own ships remain visible
+      player1Ships.forEach(ship => {
+        const gridCell = document.querySelector(`#player-grid .cell[data-row="${ship.row}"][data-col="${ship.col}"]`);
+        if (gridCell) {
+          gridCell.classList.add("ship");
+        }
+      });
+    }
+
+    // Add event listeners for grid clicks
+    playerGrid.addEventListener("click", handlePlayerGridClick);
+    opponentGrid.addEventListener("click", handleOpponentGridClickForPlacement); // For Player 2 ship placement
+    opponentGrid.addEventListener("click", handleOpponentAttack);
+
+    // Ensure opponent's grid is disabled during Player 1's ship placement and vice versa
+    function updateGridAccessibility() {
+      if (setupPhase) {
+        if (currentPlayer === 1) {
+          playerGrid.classList.remove("disabled");
+          opponentGrid.classList.add("disabled");
+        } else {
+          opponentGrid.classList.remove("disabled");
+          playerGrid.classList.add("disabled");
+        }
+      } else {
+        playerGrid.classList.add("disabled");
+        opponentGrid.classList.remove("disabled");
+      }
+    }
+
+    // Observe changes in the instruction to update grid accessibility
+    const observer = new MutationObserver(updateGridAccessibility);
+    observer.observe(instruction, { childList: true });
+
+    // Initialize instruction
+    updateInstruction();
+  </script>
+</body>
+</html>
