@@ -151,16 +151,16 @@
       { size: 2, name: "Destroyer" },
       { size: 1, name: "Submarine" },
     ];
-    let currentPlayer = 1;
-    let shipIndex = 0;
+    let currentPlayer = 1; // 1 or 2
+    let shipIndex = 0; // Index of the current ship to place
     let orientation = "horizontal"; // 'horizontal' or 'vertical'
-    let tempShipCells = [];
-    let player1Ships = [];
-    let player2Ships = [];
-    let player1Hits = [];
-    let player2Hits = [];
-    let setupPhase = true;
-    let attackingPlayer = 1;
+    let tempShipCells = []; // Temporarily stores the cells selected for ship placement
+    let player1Ships = []; // Array to store Player 1's ship cells
+    let player2Ships = []; // Array to store Player 2's ship cells
+    let player1Hits = []; // Array to store Player 1's hits
+    let player2Hits = []; // Array to store Player 2's hits
+    let setupPhase = true; // Flag to indicate if the game is in ship placement phase
+    let attackingPlayer = 1; // Player who is currently attacking
 
     // Initialize the grid
     function createGrid() {
@@ -366,7 +366,7 @@
         setupPhase = false;
         currentPlayer = 1;
         attackingPlayer = 1;
-        instruction.textContent = `All ships placed! Player 1, start attacking the opponent's grid!`;
+        instruction.textContent = `All ships placed! Player 1, start attacking the grid!`;
         rotateBtn.disabled = true;
         confirmBtn.disabled = true;
         hideShips(2); // Hide Player 2's ships
@@ -383,7 +383,7 @@
 
     // Apply Fog of War by hiding all ships
     function applyFogOfWar() {
-      // Ensure all ships are hidden
+      // Hide all ships
       hideShips(1);
       hideShips(2);
     }
