@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Improved Battleship with Fog of War</title>
+  <title>Battleship Game with Fog of War</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -39,6 +39,7 @@
       justify-content: center;
       align-items: center;
       cursor: pointer;
+      font-size: 1.2em;
     }
 
     .cell.ship {
@@ -59,15 +60,8 @@
       color: #333;
     }
 
-    #buttons {
+    #score {
       margin-top: 20px;
-    }
-
-    button {
-      margin: 5px;
-      padding: 10px 20px;
-      font-size: 1em;
-      cursor: pointer;
     }
 
     #winner {
@@ -83,17 +77,17 @@
   <div id="game-container">
     <div id="grid"></div>
   </div>
-  <div id="buttons">
-    <button id="rotate-button">Rotate Ship</button>
-    <button id="confirm-button">Confirm Placement</button>
+  <div id="score">
+    <p>Player 1 Hits: <span id="player1-score">0</span></p>
+    <p>Player 2 Hits: <span id="player2-score">0</span></p>
   </div>
   <p id="winner" style="display: none;"></p>
   <script>
     const grid = document.getElementById("grid");
     const instruction = document.getElementById("instruction");
-    const rotateButton = document.getElementById("rotate-button");
-    const confirmButton = document.getElementById("confirm-button");
     const winnerDisplay = document.getElementById("winner");
+    const player1ScoreEl = document.getElementById("player1-score");
+    const player2ScoreEl = document.getElementById("player2-score");
 
     const gridSize = 8;
     const ships = [
@@ -113,26 +107,27 @@
 
     // Create the grid
     function createGrid() {
+      grid.innerHTML = ""; // Clear grid
       for (let i = 0; i < gridSize; i++) {
         for (let j = 0; j < gridSize; j++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
           cell.dataset.row = i;
           cell.dataset.col = j;
-          cell.addEventListener("click", () => handleCellClick(cell));
           grid.appendChild(cell);
         }
       }
+      if (!setupPhase) updateFogOfWar();
     }
 
     // Handle cell clicks
-    function handleCellClick(cell) {
-      if (setupPhase) {
-        placeTempShip(cell);
-      } else {
-        handleStrike(cell);
-      }
-    }
+    grid.addEventListener("click", (e) => {
+      const cell = e.target;
+      if (!cell.classList.contains("cell")) return;
+
+      if (setupPhase) placeTempShip(cell);
+      else handleStrike(cell);
+    });
 
     // Place temporary ship
     function placeTempShip(cell) {
@@ -173,11 +168,6 @@
 
       const playerShips = currentPlayer === 1 ? player1Ships : player2Ships;
       playerShips.push(...tempShipCells);
-      tempShipCells.forEach(([r, c]) => {
-        const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-        cell.classList.add("ship");
-        cell.classList.add(`player${currentPlayer}`);
-      });
 
       shipIndex++;
       if (shipIndex === ships.length) {
@@ -186,23 +176,14 @@
 
         if (currentPlayer === 2) {
           instruction.textContent = "Player 2, place your ship of size 3! Player 1, look away!";
-          clearFogOfWar();
         } else {
           setupPhase = false;
           instruction.textContent = "All ships placed! Player 1, start striking!";
-          rotateButton.style.display = "none";
-          confirmButton.style.display = "none";
         }
       } else {
         instruction.textContent = `Player ${currentPlayer}, place your ship of size ${ships[shipIndex].size}!`;
       }
-    }
-
-    // Add fog of war
-    function clearFogOfWar() {
-      document.querySelectorAll(".cell").forEach((cell) => {
-        cell.classList.remove("ship");
-      });
+      createGrid();
     }
 
     // Strike opponent's ships
@@ -212,17 +193,39 @@
       const opponentShips = currentPlayer === 1 ? player2Ships : player1Ships;
       const hits = currentPlayer === 1 ? player1Hits : player2Hits;
 
-      if (!cell.classList.contains("hit") && !cell.classList.contains("miss")) {
+      if (!cell.textContent) {
         if (opponentShips.some(([r, c]) => r === row && c === col)) {
+          cell.textContent = "👍";
           cell.classList.add("hit");
           hits.push([row, col]);
+          updateScore();
           checkWin();
         } else {
+          cell.textContent = "😐";
           cell.classList.add("miss");
         }
         currentPlayer = currentPlayer === 1 ? 2 : 1;
         instruction.textContent = `Player ${currentPlayer}, it's your turn to strike!`;
+        createGrid();
       }
+    }
+
+    // Update fog of war
+    function updateFogOfWar() {
+      const playerShips = currentPlayer === 1 ? player1Ships : player2Ships;
+      document.querySelectorAll(".cell").forEach((cell) => {
+        const row = +cell.dataset.row;
+        const col = +cell.dataset.col;
+        if (playerShips.some(([r, c]) => r === row && c === col)) {
+          cell.classList.add("ship");
+        }
+      });
+    }
+
+    // Update score
+    function updateScore() {
+      player1ScoreEl.textContent = player1Hits.length;
+      player2ScoreEl.textContent = player2Hits.length;
     }
 
     // Check for win
@@ -239,12 +242,12 @@
     }
 
     // Rotate ship
-    rotateButton.addEventListener("click", () => {
-      orientation = orientation === "horizontal" ? "vertical" : "horizontal";
-      placeTempShip(document.querySelector(`[data-row="${tempShipCells[0][0]}"][data-col="${tempShipCells[0][1]}"]`));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "r") {
+        orientation = orientation === "horizontal" ? "vertical" : "horizontal";
+        placeTempShip(document.querySelector(`[data-row="${tempShipCells[0][0]}"][data-col="${tempShipCells[0][1]}"]`));
+      }
     });
-
-    confirmButton.addEventListener("click", confirmPlacement);
 
     // Initialize game
     createGrid();
