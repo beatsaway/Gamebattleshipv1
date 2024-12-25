@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Battleship Game with Fog of War</title>
   <style>
     body {
@@ -20,26 +20,39 @@
     #game-container {
       display: flex;
       justify-content: center;
+      gap: 50px;
       margin-top: 20px;
     }
 
-    #grid {
+    .grid-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .grid-title {
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    .grid {
       display: grid;
-      grid-template-columns: repeat(8, 50px);
-      grid-template-rows: repeat(8, 50px);
+      grid-template-columns: repeat(8, 40px);
+      grid-template-rows: repeat(8, 40px);
       gap: 2px;
     }
 
     .cell {
-      width: 50px;
-      height: 50px;
+      width: 40px;
+      height: 40px;
       border: 1px solid #444;
       background: #ddd;
       display: flex;
       justify-content: center;
       align-items: center;
       cursor: pointer;
-      font-size: 1.2em;
+      font-size: 1em;
+      user-select: none;
     }
 
     .cell.ship {
@@ -48,10 +61,22 @@
 
     .cell.hit {
       background: red;
+      color: white;
     }
 
     .cell.miss {
       background: lightblue;
+    }
+
+    #controls {
+      margin-top: 20px;
+    }
+
+    #controls button {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin: 0 10px;
+      cursor: pointer;
     }
 
     #instruction {
@@ -68,32 +93,54 @@
       font-size: 1.5em;
       color: green;
       margin-top: 20px;
+      display: none;
+    }
+
+    /* Disable pointer events when not the player's turn */
+    .disabled {
+      pointer-events: none;
+      opacity: 0.6;
     }
   </style>
 </head>
 <body>
   <h1>Battleship Game with Fog of War</h1>
-  <p id="instruction">Player 1, place your ship of size 3!</p>
+  <p id="instruction">Player 1, place your ships! Press "Rotate Ship" to change orientation.</p>
+  <div id="controls">
+    <button id="rotate-btn">Rotate Ship (R)</button>
+    <button id="confirm-btn" disabled>Confirm Placement</button>
+  </div>
   <div id="game-container">
-    <div id="grid"></div>
+    <div class="grid-wrapper">
+      <div class="grid-title">Your Grid</div>
+      <div id="player-grid" class="grid"></div>
+    </div>
+    <div class="grid-wrapper">
+      <div class="grid-title">Opponent's Grid</div>
+      <div id="opponent-grid" class="grid disabled"></div>
+    </div>
   </div>
   <div id="score">
     <p>Player 1 Hits: <span id="player1-score">0</span></p>
     <p>Player 2 Hits: <span id="player2-score">0</span></p>
   </div>
-  <p id="winner" style="display: none;"></p>
+  <p id="winner"></p>
+
   <script>
-    const grid = document.getElementById("grid");
+    const playerGrid = document.getElementById("player-grid");
+    const opponentGrid = document.getElementById("opponent-grid");
     const instruction = document.getElementById("instruction");
+    const rotateBtn = document.getElementById("rotate-btn");
+    const confirmBtn = document.getElementById("confirm-btn");
     const winnerDisplay = document.getElementById("winner");
     const player1ScoreEl = document.getElementById("player1-score");
     const player2ScoreEl = document.getElementById("player2-score");
 
     const gridSize = 8;
     const ships = [
-      { size: 3, placed: false },
-      { size: 2, placed: false },
-      { size: 1, placed: false },
+      { size: 3, name: "Cruiser" },
+      { size: 2, name: "Destroyer" },
+      { size: 1, name: "Submarine" },
     ];
     let currentPlayer = 1;
     let shipIndex = 0;
@@ -104,153 +151,274 @@
     let player1Hits = [];
     let player2Hits = [];
     let setupPhase = true;
+    let attackingPlayer = 1;
 
-    // Create the grid
-    function createGrid() {
-      grid.innerHTML = ""; // Clear grid
+    // Utility function to create grids
+    function createGrid(gridElement) {
+      gridElement.innerHTML = "";
       for (let i = 0; i < gridSize; i++) {
         for (let j = 0; j < gridSize; j++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
           cell.dataset.row = i;
           cell.dataset.col = j;
-          grid.appendChild(cell);
+          gridElement.appendChild(cell);
         }
       }
-      if (!setupPhase) updateFogOfWar();
     }
 
-    // Handle cell clicks
-    grid.addEventListener("click", (e) => {
+    // Initialize both grids
+    createGrid(playerGrid);
+    createGrid(opponentGrid);
+
+    // Handle rotation
+    rotateBtn.addEventListener("click", () => {
+      orientation = orientation === "horizontal" ? "vertical" : "horizontal";
+      instruction.textContent = `Player ${currentPlayer}, place your ${ships[shipIndex].name} (Size: ${ships[shipIndex].size})! Orientation: ${orientation}`;
+    });
+
+    // Place ship on player's grid
+    playerGrid.addEventListener("click", (e) => {
+      if (!setupPhase || currentPlayer !== 1) return;
       const cell = e.target;
       if (!cell.classList.contains("cell")) return;
 
-      if (setupPhase) placeTempShip(cell);
-      else handleStrike(cell);
-    });
-
-    // Place temporary ship
-    function placeTempShip(cell) {
-      clearTempShip();
       const row = +cell.dataset.row;
       const col = +cell.dataset.col;
       const ship = ships[shipIndex];
 
-      tempShipCells = [];
+      // Calculate ship cells based on orientation
+      let proposedCells = [];
       for (let i = 0; i < ship.size; i++) {
         const targetRow = orientation === "horizontal" ? row : row + i;
         const targetCol = orientation === "horizontal" ? col + i : col;
 
+        // Check boundaries
         if (targetRow >= gridSize || targetCol >= gridSize) {
-          tempShipCells = [];
+          alert("Ship placement out of bounds!");
           return;
         }
-        tempShipCells.push([targetRow, targetCol]);
-        const targetCell = document.querySelector(`[data-row="${targetRow}"][data-col="${targetCol}"]`);
-        targetCell.classList.add("ship");
-      }
-    }
 
-    // Clear temporary ship
-    function clearTempShip() {
-      tempShipCells.forEach(([r, c]) => {
-        const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-        cell.classList.remove("ship");
+        // Check for overlapping ships
+        if (player1Ships.some(cell => cell.row === targetRow && cell.col === targetCol)) {
+          alert("Ships cannot overlap!");
+          return;
+        }
+
+        proposedCells.push({ row: targetRow, col: targetCol });
+      }
+
+      // Highlight proposed ship
+      clearTempShip();
+      proposedCells.forEach(cell => {
+        const gridCell = document.querySelector(`#player-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+        gridCell.classList.add("ship");
       });
-    }
+      tempShipCells = proposedCells;
+      confirmBtn.disabled = false;
+      instruction.textContent = `Player ${currentPlayer}, press "Confirm Placement" to place your ${ship.name}!`;
+    });
 
     // Confirm ship placement
-    function confirmPlacement() {
+    confirmBtn.addEventListener("click", () => {
       if (tempShipCells.length === 0) {
-        alert("Invalid placement!");
+        alert("No ship to place!");
         return;
       }
 
-      const playerShips = currentPlayer === 1 ? player1Ships : player2Ships;
-      playerShips.push(...tempShipCells);
+      // Add to player's ships
+      player1Ships.push(...tempShipCells);
+
+      // Clear temporary ship highlights
+      tempShipCells.forEach(cell => {
+        const gridCell = document.querySelector(`#player-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+        gridCell.classList.add("placed");
+        gridCell.classList.remove("ship");
+      });
+
+      // Reset temp cells and disable confirm button
+      tempShipCells = [];
+      confirmBtn.disabled = true;
 
       shipIndex++;
-      if (shipIndex === ships.length) {
-        currentPlayer = currentPlayer === 1 ? 2 : 1;
-        shipIndex = 0;
-
-        if (currentPlayer === 2) {
-          instruction.textContent = "Player 2, place your ship of size 3! Player 1, look away!";
-        } else {
-          setupPhase = false;
-          instruction.textContent = "All ships placed! Player 1, start striking!";
-        }
+      if (shipIndex < ships.length) {
+        instruction.textContent = `Player ${currentPlayer}, place your ${ships[shipIndex].name} (Size: ${ships[shipIndex].size})! Press "Rotate Ship" to change orientation.`;
       } else {
-        instruction.textContent = `Player ${currentPlayer}, place your ship of size ${ships[shipIndex].size}!`;
-      }
-      createGrid();
-    }
-
-    // Strike opponent's ships
-    function handleStrike(cell) {
-      const row = +cell.dataset.row;
-      const col = +cell.dataset.col;
-      const opponentShips = currentPlayer === 1 ? player2Ships : player1Ships;
-      const hits = currentPlayer === 1 ? player1Hits : player2Hits;
-
-      if (!cell.textContent) {
-        if (opponentShips.some(([r, c]) => r === row && c === col)) {
-          cell.textContent = "👍";
-          cell.classList.add("hit");
-          hits.push([row, col]);
-          updateScore();
-          checkWin();
+        if (currentPlayer === 1) {
+          // Switch to Player 2 for ship placement
+          currentPlayer = 2;
+          shipIndex = 0;
+          setupPhase = true;
+          instruction.textContent = `Player 2, place your ${ships[shipIndex].name} (Size: ${ships[shipIndex].size})! Press "Rotate Ship" to change orientation.`;
+          playerGrid.classList.add("disabled");
+          opponentGrid.classList.remove("disabled");
         } else {
-          cell.textContent = "😐";
-          cell.classList.add("miss");
+          // All ships placed, start attacking
+          setupPhase = false;
+          currentPlayer = 1;
+          attackingPlayer = 1;
+          instruction.textContent = `All ships placed! Player 1, start attacking the opponent's grid!`;
+          rotateBtn.disabled = true;
+          confirmBtn.disabled = true;
+          playerGrid.classList.add("disabled");
+          opponentGrid.classList.remove("disabled");
         }
-        currentPlayer = currentPlayer === 1 ? 2 : 1;
-        instruction.textContent = `Player ${currentPlayer}, it's your turn to strike!`;
-        createGrid();
-      }
-    }
-
-    // Update fog of war
-    function updateFogOfWar() {
-      const playerShips = currentPlayer === 1 ? player1Ships : player2Ships;
-      document.querySelectorAll(".cell").forEach((cell) => {
-        const row = +cell.dataset.row;
-        const col = +cell.dataset.col;
-        if (playerShips.some(([r, c]) => r === row && c === col)) {
-          cell.classList.add("ship");
-        }
-      });
-    }
-
-    // Update score
-    function updateScore() {
-      player1ScoreEl.textContent = player1Hits.length;
-      player2ScoreEl.textContent = player2Hits.length;
-    }
-
-    // Check for win
-    function checkWin() {
-      if (player1Hits.length === player2Ships.length) {
-        winnerDisplay.textContent = "Player 1 Wins!";
-        winnerDisplay.style.display = "block";
-        instruction.style.display = "none";
-      } else if (player2Hits.length === player1Ships.length) {
-        winnerDisplay.textContent = "Player 2 Wins!";
-        winnerDisplay.style.display = "block";
-        instruction.style.display = "none";
-      }
-    }
-
-    // Rotate ship
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "r") {
-        orientation = orientation === "horizontal" ? "vertical" : "horizontal";
-        placeTempShip(document.querySelector(`[data-row="${tempShipCells[0][0]}"][data-col="${tempShipCells[0][1]}"]`));
       }
     });
 
-    // Initialize game
-    createGrid();
+    // Handle Player 2 ship placement
+    opponentGrid.addEventListener("click", (e) => {
+      if (!setupPhase || currentPlayer !== 2) return;
+      const cell = e.target;
+      if (!cell.classList.contains("cell")) return;
+
+      const row = +cell.dataset.row;
+      const col = +cell.dataset.col;
+      const ship = ships[shipIndex];
+
+      // Calculate ship cells based on orientation
+      let proposedCells = [];
+      for (let i = 0; i < ship.size; i++) {
+        const targetRow = orientation === "horizontal" ? row : row + i;
+        const targetCol = orientation === "horizontal" ? col + i : col;
+
+        // Check boundaries
+        if (targetRow >= gridSize || targetCol >= gridSize) {
+          alert("Ship placement out of bounds!");
+          return;
+        }
+
+        // Check for overlapping ships
+        if (player2Ships.some(cell => cell.row === targetRow && cell.col === targetCol)) {
+          alert("Ships cannot overlap!");
+          return;
+        }
+
+        proposedCells.push({ row: targetRow, col: targetCol });
+      }
+
+      // Highlight proposed ship
+      clearTempShipOpponent();
+      proposedCells.forEach(cell => {
+        const gridCell = document.querySelector(`#opponent-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+        gridCell.classList.add("ship");
+      });
+      tempShipCells = proposedCells;
+      confirmBtn.disabled = false;
+      instruction.textContent = `Player ${currentPlayer}, press "Confirm Placement" to place your ${ship.name}!`;
+    });
+
+    // Confirm ship placement for Player 2
+    confirmBtn.addEventListener("click", () => {
+      if (setupPhase && currentPlayer === 2 && tempShipCells.length > 0) {
+        // Add to Player 2's ships
+        player2Ships.push(...tempShipCells);
+
+        // Clear temporary ship highlights
+        tempShipCells.forEach(cell => {
+          const gridCell = document.querySelector(`#opponent-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+          gridCell.classList.add("placed");
+          gridCell.classList.remove("ship");
+        });
+
+        // Reset temp cells and disable confirm button
+        tempShipCells = [];
+        confirmBtn.disabled = true;
+
+        shipIndex++;
+        if (shipIndex < ships.length) {
+          instruction.textContent = `Player ${currentPlayer}, place your ${ships[shipIndex].name} (Size: ${ships[shipIndex].size})! Press "Rotate Ship" to change orientation.`;
+        } else {
+          // All ships placed, start attacking
+          setupPhase = false;
+          currentPlayer = 1;
+          attackingPlayer = 1;
+          instruction.textContent = `All ships placed! Player 1, start attacking the opponent's grid!`;
+          rotateBtn.disabled = true;
+          confirmBtn.disabled = true;
+          playerGrid.classList.add("disabled");
+          opponentGrid.classList.remove("disabled");
+        }
+      }
+    });
+
+    // Clear temporary ship placement on player's grid
+    function clearTempShip() {
+      tempShipCells.forEach(cell => {
+        const gridCell = document.querySelector(`#player-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+        gridCell.classList.remove("ship");
+      });
+    }
+
+    // Clear temporary ship placement on opponent's grid
+    function clearTempShipOpponent() {
+      tempShipCells.forEach(cell => {
+        const gridCell = document.querySelector(`#opponent-grid .cell[data-row="${cell.row}"][data-col="${cell.col}"]`);
+        gridCell.classList.remove("ship");
+      });
+    }
+
+    // Handle attacking the opponent's grid
+    opponentGrid.addEventListener("click", (e) => {
+      if (setupPhase) return; // Don't allow attacking during setup
+      if (attackingPlayer !== currentPlayer) return;
+
+      const cell = e.target;
+      if (!cell.classList.contains("cell")) return;
+      if (cell.classList.contains("hit") || cell.classList.contains("miss")) return; // Already attacked
+
+      const row = +cell.dataset.row;
+      const col = +cell.dataset.col;
+
+      // Check if hit
+      if (player1Ships.some(ship => ship.row === row && ship.col === col)) {
+        cell.textContent = "💥";
+        cell.classList.add("hit");
+        if (currentPlayer === 1) {
+          player1Hits.push({ row, col });
+          player1ScoreEl.textContent = player1Hits.length;
+          checkWin(2); // Opponent is Player 2
+        }
+        if (currentPlayer === 2) {
+          player2Hits.push({ row, col });
+          player2ScoreEl.textContent = player2Hits.length;
+          checkWin(1); // Opponent is Player 1
+        }
+      } else {
+        cell.textContent = "❌";
+        cell.classList.add("miss");
+      }
+
+      // Switch turns
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      attackingPlayer = currentPlayer;
+      instruction.textContent = `Player ${currentPlayer}, it's your turn to attack!`;
+    });
+
+    // Handle attacking the player's own grid (for Player 2's ship placement visibility)
+    playerGrid.addEventListener("click", (e) => {
+      // Optional: Implement features like allowing players to see their own ships during attacks
+    });
+
+    // Update scores and check for win
+    function checkWin(winningPlayer) {
+      const opponentShips = winningPlayer === 1 ? player2Ships : player1Ships;
+      const opponentHits = winningPlayer === 1 ? player2Hits : player1Hits;
+
+      if (opponentHits.length === opponentShips.length) {
+        winnerDisplay.textContent = `Player ${winningPlayer} Wins!`;
+        winnerDisplay.style.display = "block";
+        instruction.style.display = "none";
+        opponentGrid.classList.add("disabled");
+      }
+    }
+
+    // Allow rotation using the 'R' key
+    document.addEventListener("keydown", (e) => {
+      if (e.key.toLowerCase() === "r") {
+        rotateBtn.click();
+      }
+    });
   </script>
 </body>
 </html>
