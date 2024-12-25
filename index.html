@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Improved Battleship Game</title>
+  <title>Improved Battleship with Fog of War</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
-      background: #f4f4f9;
+      background: #f0f0f5;
       margin: 0;
       padding: 20px;
     }
@@ -33,7 +33,7 @@
     .cell {
       width: 50px;
       height: 50px;
-      border: 1px solid #000;
+      border: 1px solid #444;
       background: #ddd;
       display: flex;
       justify-content: center;
@@ -56,12 +56,18 @@
     #instruction {
       font-size: 1.2em;
       margin-top: 20px;
+      color: #333;
     }
 
-    #rotate-button {
-      margin-top: 10px;
+    #buttons {
+      margin-top: 20px;
+    }
+
+    button {
+      margin: 5px;
       padding: 10px 20px;
       font-size: 1em;
+      cursor: pointer;
     }
 
     #winner {
@@ -72,17 +78,21 @@
   </style>
 </head>
 <body>
-  <h1>Improved Battleship Game</h1>
+  <h1>Battleship Game with Fog of War</h1>
   <p id="instruction">Player 1, place your ship of size 3!</p>
   <div id="game-container">
     <div id="grid"></div>
   </div>
-  <button id="rotate-button">Rotate Ship</button>
+  <div id="buttons">
+    <button id="rotate-button">Rotate Ship</button>
+    <button id="confirm-button">Confirm Placement</button>
+  </div>
   <p id="winner" style="display: none;"></p>
   <script>
     const grid = document.getElementById("grid");
     const instruction = document.getElementById("instruction");
     const rotateButton = document.getElementById("rotate-button");
+    const confirmButton = document.getElementById("confirm-button");
     const winnerDisplay = document.getElementById("winner");
 
     const gridSize = 8;
@@ -94,6 +104,7 @@
     let currentPlayer = 1;
     let shipIndex = 0;
     let orientation = "horizontal"; // 'horizontal' or 'vertical'
+    let tempShipCells = [];
     let player1Ships = [];
     let player2Ships = [];
     let player1Hits = [];
@@ -117,48 +128,56 @@
     // Handle cell clicks
     function handleCellClick(cell) {
       if (setupPhase) {
-        handleShipPlacement(cell);
+        placeTempShip(cell);
       } else {
         handleStrike(cell);
       }
     }
 
-    // Place ships
-    function handleShipPlacement(cell) {
+    // Place temporary ship
+    function placeTempShip(cell) {
+      clearTempShip();
       const row = +cell.dataset.row;
       const col = +cell.dataset.col;
       const ship = ships[shipIndex];
-      const shipCells = [];
 
-      // Determine if the ship can be placed
+      tempShipCells = [];
       for (let i = 0; i < ship.size; i++) {
         const targetRow = orientation === "horizontal" ? row : row + i;
         const targetCol = orientation === "horizontal" ? col + i : col;
 
-        if (
-          targetRow >= gridSize ||
-          targetCol >= gridSize ||
-          document.querySelector(`[data-row="${targetRow}"][data-col="${targetCol}"]`).classList.contains("ship")
-        ) {
-          alert("Invalid placement!");
+        if (targetRow >= gridSize || targetCol >= gridSize) {
+          tempShipCells = [];
           return;
         }
+        tempShipCells.push([targetRow, targetCol]);
+        const targetCell = document.querySelector(`[data-row="${targetRow}"][data-col="${targetCol}"]`);
+        targetCell.classList.add("ship");
+      }
+    }
 
-        shipCells.push([targetRow, targetCol]);
+    // Clear temporary ship
+    function clearTempShip() {
+      tempShipCells.forEach(([r, c]) => {
+        const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+        cell.classList.remove("ship");
+      });
+    }
+
+    // Confirm ship placement
+    function confirmPlacement() {
+      if (tempShipCells.length === 0) {
+        alert("Invalid placement!");
+        return;
       }
 
-      // Place the ship
-      shipCells.forEach(([r, c]) => {
+      const playerShips = currentPlayer === 1 ? player1Ships : player2Ships;
+      playerShips.push(...tempShipCells);
+      tempShipCells.forEach(([r, c]) => {
         const cell = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
         cell.classList.add("ship");
+        cell.classList.add(`player${currentPlayer}`);
       });
-
-      // Save ship data
-      if (currentPlayer === 1) {
-        player1Ships.push(...shipCells);
-      } else {
-        player2Ships.push(...shipCells);
-      }
 
       shipIndex++;
       if (shipIndex === ships.length) {
@@ -166,15 +185,24 @@
         shipIndex = 0;
 
         if (currentPlayer === 2) {
-          instruction.textContent = "Player 2, place your ship of size 3!";
+          instruction.textContent = "Player 2, place your ship of size 3! Player 1, look away!";
+          clearFogOfWar();
         } else {
           setupPhase = false;
           instruction.textContent = "All ships placed! Player 1, start striking!";
           rotateButton.style.display = "none";
+          confirmButton.style.display = "none";
         }
       } else {
         instruction.textContent = `Player ${currentPlayer}, place your ship of size ${ships[shipIndex].size}!`;
       }
+    }
+
+    // Add fog of war
+    function clearFogOfWar() {
+      document.querySelectorAll(".cell").forEach((cell) => {
+        cell.classList.remove("ship");
+      });
     }
 
     // Strike opponent's ships
@@ -213,7 +241,10 @@
     // Rotate ship
     rotateButton.addEventListener("click", () => {
       orientation = orientation === "horizontal" ? "vertical" : "horizontal";
+      placeTempShip(document.querySelector(`[data-row="${tempShipCells[0][0]}"][data-col="${tempShipCells[0][1]}"]`));
     });
+
+    confirmButton.addEventListener("click", confirmPlacement);
 
     // Initialize game
     createGrid();
