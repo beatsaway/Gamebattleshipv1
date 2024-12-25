@@ -311,6 +311,28 @@
       }
     }
 
+    // Show ships for a specific player
+    function showShips(player) {
+      const shipsArray = player === 1 ? player1Ships : player2Ships;
+      shipsArray.forEach(ship => {
+        const gridCell = document.querySelector(`.cell[data-row="${ship.row}"][data-col="${ship.col}"]`);
+        if (gridCell) {
+          gridCell.classList.add("ship");
+        }
+      });
+    }
+
+    // Hide ships for a specific player
+    function hideShips(player) {
+      const shipsArray = player === 1 ? player1Ships : player2Ships;
+      shipsArray.forEach(ship => {
+        const gridCell = document.querySelector(`.cell[data-row="${ship.row}"][data-col="${ship.col}"]`);
+        if (gridCell) {
+          gridCell.classList.remove("ship");
+        }
+      });
+    }
+
     // Confirm ship placement
     function confirmPlacement() {
       if (tempShipCells.length === 0) {
@@ -330,58 +352,40 @@
         gridCell.classList.remove("temp-ship");
       });
 
+      // Show ships for current player
+      showShips(currentPlayer);
+
+      // If switching to the other player, hide current player's ships
+      if (currentPlayer === 1) {
+        currentPlayer = 2;
+        shipIndex = 0;
+        instruction.textContent = `Player 2, place your Cruiser (Size: 3). Use "Rotate Ship" to change orientation.`;
+        hideShips(1); // Hide Player 1's ships
+      } else {
+        // All ships placed, start attacking with Fog of War
+        setupPhase = false;
+        currentPlayer = 1;
+        attackingPlayer = 1;
+        instruction.textContent = `All ships placed! Player 1, start attacking the opponent's grid!`;
+        rotateBtn.disabled = true;
+        confirmBtn.disabled = true;
+        hideShips(2); // Hide Player 2's ships
+        applyFogOfWar();
+      }
+
       // Reset temporary cells and disable confirm button
       tempShipCells = [];
       confirmBtn.disabled = true;
       lastClickedCell = null;
-
-      shipIndex++;
-      if (shipIndex < ships.length) {
-        // Continue placing next ship
-        updateInstruction();
-      } else {
-        if (currentPlayer === 1) {
-          // Switch to Player 2 for ship placement
-          currentPlayer = 2;
-          shipIndex = 0;
-          instruction.textContent = `Player 2, place your Cruiser (Size: 3). Use "Rotate Ship" to change orientation.`;
-        } else {
-          // All ships placed, start attacking with Fog of War
-          setupPhase = false;
-          currentPlayer = 1;
-          attackingPlayer = 1;
-          instruction.textContent = `All ships placed! Player 1, start attacking the opponent's grid!`;
-          rotateBtn.disabled = true;
-          confirmBtn.disabled = true;
-          applyFogOfWar();
-        }
-      }
     }
 
     confirmBtn.addEventListener("click", confirmPlacement);
 
     // Apply Fog of War by hiding all ships
     function applyFogOfWar() {
-      // Remove ship visibility by clearing the grid
-      const cells = gameGrid.getElementsByClassName("cell");
-      for (let cell of cells) {
-        cell.classList.remove("ship");
-        cell.classList.remove("placed");
-      }
-
-      // Mark Player 1's ships as hidden data
-      player1Ships.forEach(ship => {
-        // Ships are stored but not displayed
-        // Optionally, you can store them in a hidden data structure
-      });
-
-      // Mark Player 2's ships as hidden data
-      player2Ships.forEach(ship => {
-        // Ships are stored but not displayed
-      });
-
-      // Allow attacking on the grid
-      gameGrid.classList.remove("disabled");
+      // Ensure all ships are hidden
+      hideShips(1);
+      hideShips(2);
     }
 
     // Handle attacking the grid
