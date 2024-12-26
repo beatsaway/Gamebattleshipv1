@@ -3,60 +3,151 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Single Grid Battleship Game with Fog of War</title>
+  <title>🎯 Battleship Showdown 🚢</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background: #f0f0f5;
+    /* Reset and Base Styles */
+    * {
+      box-sizing: border-box;
       margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+      background: linear-gradient(135deg, #f0f8ff, #dcdcdc);
       padding: 20px;
+      color: #333;
     }
 
     h1 {
       margin-bottom: 10px;
+      color: #333;
+      text-shadow: 2px 2px #bbb;
     }
 
+    /* Message Area */
+    #message-area {
+      margin-bottom: 20px;
+    }
+
+    #message-area p {
+      font-size: 1.2em;
+      color: #333;
+      min-height: 1.5em;
+      white-space: pre-line; /* Preserve line breaks */
+    }
+
+    /* Controls */
+    #controls {
+      margin-bottom: 20px;
+    }
+
+    #controls button {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin: 0 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background-color: #4caf50;
+      color: white;
+      transition: background-color 0.3s, transform 0.2s;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    #controls button:hover:not(:disabled) {
+      background-color: #45a049;
+      transform: translateY(-2px);
+    }
+
+    #controls button:disabled {
+      background-color: #a5d6a7;
+      cursor: not-allowed;
+    }
+
+    /* Next Turn Button */
+    #next-turn-btn {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin-bottom: 20px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background-color: #008CBA;
+      color: white;
+      transition: background-color 0.3s, transform 0.2s;
+      display: none; /* Hidden by default */
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    #next-turn-btn:hover:not(:disabled) {
+      background-color: #007BB5;
+      transform: translateY(-2px);
+    }
+
+    #next-turn-btn:disabled {
+      background-color: #a5d6a7;
+      cursor: not-allowed;
+    }
+
+    /* Game Container and Grid */
     #game-container {
       display: flex;
       justify-content: center;
       margin-top: 20px;
+      flex-wrap: wrap;
     }
 
     .grid-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
+      margin: 10px;
     }
 
     .grid-title {
       margin-bottom: 10px;
       font-weight: bold;
+      font-size: 1.2em;
+      color: #444;
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(8, 40px);
-      grid-template-rows: repeat(8, 40px);
+      grid-template-columns: repeat(10, 40px);
+      grid-template-rows: repeat(10, 40px);
       gap: 2px;
+      background-color: #333;
+      padding: 5px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
     .cell {
       width: 40px;
       height: 40px;
-      border: 1px solid #444;
-      background: #ddd;
+      border: 1px solid #555;
+      background: #f0f8ff;
       display: flex;
       justify-content: center;
       align-items: center;
       cursor: pointer;
-      font-size: 1em;
+      font-size: 1.2em;
       user-select: none;
       position: relative;
+      transition: background 0.3s, transform 0.2s;
+      border-radius: 5px;
+    }
+
+    .cell:hover:not(.disabled):not(.placed) {
+      /* No hover effects as per the requirement */
     }
 
     .cell.ship {
       background: #4caf50;
+      opacity: 0.7;
+      cursor: default;
     }
 
     .cell.placed {
@@ -65,42 +156,58 @@
       cursor: default;
     }
 
-    .cell.hit {
-      background: red;
+    /* Player 1 Strikes */
+    .cell.hit-player1 {
+      background: #ff4d4d;
       color: white;
+      font-size: 1.4em;
+      border: 2px solid #cc0000;
+      border-radius: 5px;
     }
 
-    .cell.miss {
-      background: lightblue;
+    .cell.miss-player1 {
+      background: #87cefa;
       color: white;
+      font-size: 1.4em;
+      border: 2px solid #4682b4;
+      border-radius: 5px;
     }
 
-    #controls {
-      margin-top: 20px;
+    /* Player 2 Strikes */
+    .cell.hit-player2 {
+      background: #b30000;
+      color: white;
+      font-size: 1.4em;
+      border: 2px solid #800000;
+      border-radius: 5px;
     }
 
-    #controls button {
-      padding: 10px 20px;
-      font-size: 1em;
-      margin: 0 10px;
-      cursor: pointer;
+    .cell.miss-player2 {
+      background: #1e90ff;
+      color: white;
+      font-size: 1.4em;
+      border: 2px solid #00008b;
+      border-radius: 5px;
     }
 
-    #instruction {
-      font-size: 1.2em;
-      margin-top: 20px;
-      color: #333;
-    }
-
+    /* Score Display */
     #score {
       margin-top: 20px;
+      font-size: 1.1em;
+      color: #555;
     }
 
+    #score p {
+      margin: 5px 0;
+    }
+
+    /* Winner Message */
     #winner {
       font-size: 1.5em;
-      color: green;
+      color: #28a745;
       margin-top: 20px;
       display: none;
+      text-shadow: 1px 1px #bbb;
     }
 
     /* Disable pointer events when not the player's turn or during setup */
@@ -112,25 +219,48 @@
     /* Highlighting during ship placement */
     .cell.temp-ship {
       background: rgba(76, 175, 80, 0.5);
+      transition: background 0.3s;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: repeat(10, 30px);
+        grid-template-rows: repeat(10, 30px);
+      }
+
+      .cell {
+        width: 30px;
+        height: 30px;
+        font-size: 1em;
+      }
+
+      #controls button, #next-turn-btn {
+        padding: 8px 16px;
+        font-size: 0.9em;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Single Grid Battleship Game with Fog of War</h1>
-  <p id="instruction">Player 1, place your Cruiser (Size: 3). Use "Rotate Ship" to change orientation.</p>
-  <div id="controls">
-    <button id="rotate-btn">Rotate Ship (R)</button>
-    <button id="confirm-btn" disabled>Confirm Placement</button>
+  <h1>🎯 Battleship Showdown 🚢</h1>
+  <div id="message-area">
+    <p id="instruction">Player 1, place your Battleship (Size: 4). Use "Rotate Ship" to change orientation.</p>
   </div>
+  <div id="controls">
+    <button id="rotate-btn">🔄 Rotate Ship (R)</button>
+    <button id="confirm-btn" disabled>✅ Confirm Placement</button>
+  </div>
+  <button id="next-turn-btn">➡️ Next Turn</button>
   <div id="game-container">
     <div class="grid-wrapper">
-      <div class="grid-title">Battleship Grid</div>
+      <div class="grid-title">🗺️ Battleship Grid 🗺️</div>
       <div id="game-grid" class="grid"></div>
     </div>
   </div>
   <div id="score">
-    <p>Player 1 Hits: <span id="player1-score">0</span></p>
-    <p>Player 2 Hits: <span id="player2-score">0</span></p>
+    <p>🎯 Player 1 Hits: <span id="player1-score">0</span></p>
+    <p>🎯 Player 2 Hits: <span id="player2-score">0</span></p>
   </div>
   <p id="winner"></p>
 
@@ -143,13 +273,14 @@
     const winnerDisplay = document.getElementById("winner");
     const player1ScoreEl = document.getElementById("player1-score");
     const player2ScoreEl = document.getElementById("player2-score");
+    const nextTurnBtn = document.getElementById("next-turn-btn");
 
     // Game variables
-    const gridSize = 8;
+    const gridSize = 10;
     const ships = [
+      { size: 4, name: "Battleship" },
       { size: 3, name: "Cruiser" },
       { size: 2, name: "Destroyer" },
-      { size: 1, name: "Submarine" },
     ];
     let currentPlayer = 1; // 1 or 2
     let shipIndex = 0; // Index of the current ship to place
@@ -157,8 +288,8 @@
     let tempShipCells = []; // Temporarily stores the cells selected for ship placement
     let player1Ships = []; // Array to store Player 1's ship cells
     let player2Ships = []; // Array to store Player 2's ship cells
-    let player1Hits = []; // Array to store Player 1's hits
-    let player2Hits = []; // Array to store Player 2's hits
+    let player1Strikes = []; // Array to store Player 1's strikes
+    let player2Strikes = []; // Array to store Player 2's strikes
     let setupPhase = true; // Flag to indicate if the game is in ship placement phase
     let attackingPlayer = 1; // Player who is currently attacking
 
@@ -196,8 +327,17 @@
 
     // Update instruction text
     function updateInstruction() {
-      const currentShip = ships[shipIndex];
-      instruction.textContent = `Player ${currentPlayer}, place your ${currentShip.name} (Size: ${currentShip.size}). Orientation: ${orientation}`;
+      if (setupPhase) {
+        const currentShip = ships[shipIndex];
+        instruction.textContent = `Player ${currentPlayer}, place your ${currentShip.name} (Size: ${currentShip.size}). Orientation: ${capitalizeFirstLetter(orientation)}.`;
+      } else {
+        instruction.textContent = `Player ${currentPlayer}, it's your turn to attack! Click a cell to strike.`;
+      }
+    }
+
+    // Capitalize the first letter of a string
+    function capitalizeFirstLetter(string) {
+      return string.charAt(0).toUpperCase() + string.slice(1);
     }
 
     // Highlight temporary ship placement
@@ -311,7 +451,7 @@
       }
     }
 
-    // Show ships for a specific player
+    // Show ships for a specific player (used during placement)
     function showShips(player) {
       const shipsArray = player === 1 ? player1Ships : player2Ships;
       shipsArray.forEach(ship => {
@@ -322,13 +462,13 @@
       });
     }
 
-    // Hide ships for a specific player
+    // Hide ships for a specific player (used to implement Fog of War)
     function hideShips(player) {
       const shipsArray = player === 1 ? player1Ships : player2Ships;
       shipsArray.forEach(ship => {
         const gridCell = document.querySelector(`.cell[data-row="${ship.row}"][data-col="${ship.col}"]`);
         if (gridCell) {
-          gridCell.classList.remove("ship");
+          gridCell.classList.remove("ship", "placed");
         }
       });
     }
@@ -336,7 +476,7 @@
     // Confirm ship placement
     function confirmPlacement() {
       if (tempShipCells.length === 0) {
-        alert("Invalid ship placement! Please select a valid location.");
+        instruction.textContent = `❌ Invalid ship placement! Please select a valid location.`;
         return;
       }
 
@@ -355,37 +495,75 @@
       // Show ships for current player
       showShips(currentPlayer);
 
-      // If switching to the other player, hide current player's ships
-      if (currentPlayer === 1) {
-        currentPlayer = 2;
-        shipIndex = 0;
-        instruction.textContent = `Player 2, place your Cruiser (Size: 3). Use "Rotate Ship" to change orientation.`;
-        hideShips(1); // Hide Player 1's ships
+      // Increment shipIndex
+      shipIndex++;
+
+      if (shipIndex < ships.length) {
+        // Prompt the same player to place the next ship
+        instruction.textContent = `Player ${currentPlayer}, place your ${ships[shipIndex].name} (Size: ${ships[shipIndex].size}). Orientation: ${capitalizeFirstLetter(orientation)}.`;
       } else {
-        // All ships placed, start attacking with Fog of War
-        setupPhase = false;
-        currentPlayer = 1;
-        attackingPlayer = 1;
-        instruction.textContent = `All ships placed! Player 1, start attacking the grid!`;
-        rotateBtn.disabled = true;
-        confirmBtn.disabled = true;
-        hideShips(2); // Hide Player 2's ships
-        applyFogOfWar();
+        if (currentPlayer === 1) {
+          // Player 1 has placed all ships, switch to Player 2
+          hideShips(1); // Hide Player 1's ships
+          currentPlayer = 2;
+          shipIndex = 0;
+          instruction.textContent = `Player 2, place your ${ships[shipIndex].name} (Size: ${ships[shipIndex].size}). Orientation: ${capitalizeFirstLetter(orientation)}.`;
+        } else {
+          // Player 2 has placed all ships, start attack phase
+          setupPhase = false;
+          currentPlayer = 1;
+          attackingPlayer = 1;
+          instruction.textContent = `🎉 All ships placed! Player 1, start attacking the grid! Click a cell to strike.`;
+          rotateBtn.style.display = "none"; // Hide Rotate button
+          confirmBtn.style.display = "none"; // Hide Confirm button
+          hideShips(1); // Ensure Player 1's ships are hidden
+          hideShips(2); // Ensure Player 2's ships are hidden
+          applyFogOfWar();
+        }
       }
 
       // Reset temporary cells and disable confirm button
       tempShipCells = [];
       confirmBtn.disabled = true;
       lastClickedCell = null;
+      updateInstruction();
     }
 
     confirmBtn.addEventListener("click", confirmPlacement);
 
     // Apply Fog of War by hiding all ships
     function applyFogOfWar() {
-      // Hide all ships
       hideShips(1);
       hideShips(2);
+      // Display message in message area instead of alert
+      const message = document.createElement("p");
+      message.innerHTML = `⚔️ Both players have placed their ships. Let the battle begin! ⚔️`;
+      document.getElementById("message-area").appendChild(message);
+    }
+
+    // Render current player's strikes
+    function renderStrikes() {
+      // Clear all strike indicators
+      const cells = gameGrid.getElementsByClassName("cell");
+      for (let cell of cells) {
+        cell.classList.remove("hit-player1", "miss-player1", "hit-player2", "miss-player2");
+        cell.textContent = ""; // Clear text content
+      }
+
+      // Render current player's strikes
+      let strikes = currentPlayer === 1 ? player1Strikes : player2Strikes;
+      strikes.forEach(strike => {
+        const gridCell = document.querySelector(`.cell[data-row="${strike.row}"][data-col="${strike.col}"]`);
+        if (gridCell) {
+          if (strike.isHit) {
+            gridCell.textContent = "💥";
+            gridCell.classList.add(`hit-player${currentPlayer}`);
+          } else {
+            gridCell.textContent = "❌";
+            gridCell.classList.add(`miss-player${currentPlayer}`);
+          }
+        }
+      });
     }
 
     // Handle attacking the grid
@@ -395,7 +573,10 @@
 
       const cell = e.target;
       if (!cell.classList.contains("cell")) return;
-      if (cell.classList.contains("hit") || cell.classList.contains("miss")) return; // Already attacked
+      if (cell.classList.contains("hit-player1") || cell.classList.contains("miss-player1") ||
+          cell.classList.contains("hit-player2") || cell.classList.contains("miss-player2")) {
+        return; // Already attacked
+      }
 
       const row = +cell.dataset.row;
       const col = +cell.dataset.col;
@@ -405,45 +586,80 @@
       let isHit = opponentShips.some(ship => ship.row === row && ship.col === col);
 
       if (isHit) {
-        cell.textContent = "💥";
-        cell.classList.add("hit");
         if (currentPlayer === 1) {
-          player1Hits.push({ row, col });
-          player1ScoreEl.textContent = player1Hits.length;
-          checkWin(1);
+          cell.textContent = "💥";
+          cell.classList.add("hit-player1");
+          player1Strikes.push({ row, col, isHit: true });
+          player1ScoreEl.textContent = player1Strikes.filter(s => s.isHit).length;
+          instruction.textContent = `🎯 Player 1 made a hit! Click "➡️ Next Turn" to proceed.`;
         } else {
-          player2Hits.push({ row, col });
-          player2ScoreEl.textContent = player2Hits.length;
-          checkWin(2);
+          cell.textContent = "💥";
+          cell.classList.add("hit-player2");
+          player2Strikes.push({ row, col, isHit: true });
+          player2ScoreEl.textContent = player2Strikes.filter(s => s.isHit).length;
+          instruction.textContent = `🎯 Player 2 made a hit! Click "➡️ Next Turn" to proceed.`;
         }
       } else {
-        cell.textContent = "❌";
-        cell.classList.add("miss");
+        if (currentPlayer === 1) {
+          cell.textContent = "❌";
+          cell.classList.add("miss-player1");
+          player1Strikes.push({ row, col, isHit: false });
+          instruction.textContent = `🎯 Player 1 made a miss! Click "➡️ Next Turn" to proceed.`;
+        } else {
+          cell.textContent = "❌";
+          cell.classList.add("miss-player2");
+          player2Strikes.push({ row, col, isHit: false });
+          instruction.textContent = `🎯 Player 2 made a miss! Click "➡️ Next Turn" to proceed.`;
+        }
+      }
+
+      // Show Next Turn button
+      nextTurnBtn.style.display = "inline-block";
+      nextTurnBtn.disabled = false;
+    });
+
+    // Handle Next Turn
+    nextTurnBtn.addEventListener("click", () => {
+      // Disable Next Turn button
+      nextTurnBtn.disabled = true;
+
+      // Display previous player's latest score in the message area
+      let scoreMessage = '';
+      if (currentPlayer === 1) {
+        scoreMessage = `🎯 Player 1's Turn Ends.\n📊 Current Score:\nPlayer 1 Hits: ${player1Strikes.filter(s => s.isHit).length}\nPlayer 2 Hits: ${player2Strikes.filter(s => s.isHit).length}`;
+      } else {
+        scoreMessage = `🎯 Player 2's Turn Ends.\n📊 Current Score:\nPlayer 1 Hits: ${player1Strikes.filter(s => s.isHit).length}\nPlayer 2 Hits: ${player2Strikes.filter(s => s.isHit).length}`;
       }
 
       // Switch turns
       currentPlayer = currentPlayer === 1 ? 2 : 1;
       attackingPlayer = currentPlayer;
-      instruction.textContent = `Player ${currentPlayer}, it's your turn to attack!`;
+      scoreMessage += `\n➡️ Player ${currentPlayer}, it's your turn to attack! Click a cell to strike.`;
+      instruction.textContent = scoreMessage;
+
+      // Hide Next Turn button
+      nextTurnBtn.style.display = "none";
+
+      // Render strikes for the new current player
+      renderStrikes();
     });
 
     // Check for win condition
     function checkWin(winningPlayer) {
       const opponentShips = winningPlayer === 1 ? player2Ships : player1Ships;
-      const opponentHits = winningPlayer === 1 ? player1Hits : player2Hits;
+      const opponentStrikes = winningPlayer === 1 ? player1Strikes : player2Strikes;
 
       // Check if all opponent's ships have been hit
-      if (opponentHits.length >= opponentShips.length) {
-        // Verify that all ship cells are hit
-        const allHit = opponentShips.every(shipCell => opponentHits.some(hit => hit.row === shipCell.row && hit.col === shipCell.col));
-        if (allHit) {
-          winnerDisplay.textContent = `Player ${winningPlayer} Wins!`;
-          winnerDisplay.style.display = "block";
-          instruction.style.display = "none";
-          gameGrid.classList.add("disabled");
-          rotateBtn.disabled = true;
-          confirmBtn.disabled = true;
-        }
+      const allHit = opponentShips.every(shipCell => opponentStrikes.some(strike => strike.row === shipCell.row && strike.col === shipCell.col && strike.isHit));
+
+      if (allHit) {
+        winnerDisplay.textContent = `🎉 Player ${winningPlayer} Wins! 🏆`;
+        winnerDisplay.style.display = "block";
+        instruction.style.display = "none";
+        gameGrid.classList.add("disabled");
+        rotateBtn.style.display = "none"; // Ensure Rotate button is hidden
+        confirmBtn.style.display = "none"; // Ensure Confirm button is hidden
+        nextTurnBtn.style.display = "none"; // Hide Next Turn button
       }
     }
 
